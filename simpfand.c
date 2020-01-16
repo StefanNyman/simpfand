@@ -207,8 +207,13 @@ void set_path()
                 "/sys/devices/platform/coretemp.0/hwmon/hwmon4/temp1_input",
                 "/sys/devices/platform/coretemp.0/hwmon/hwmon4/temp2_input",
                 "/sys/devices/platform/coretemp.0/hwmon/hwmon4/temp3_input",
+                "/sys/devices/platform/coretemp.0/hwmon/hwmon5/temp1_input",
+                "/sys/devices/platform/coretemp.0/hwmon/hwmon5/temp2_input",
+                "/sys/devices/platform/coretemp.0/hwmon/hwmon5/temp3_input",
+                "/sys/devices/platform/coretemp.0/hwmon/hwmon5/temp4_input",
+                "/sys/devices/platform/coretemp.0/hwmon/hwmon5/temp5_input",
         };
-        for(int i = 0; i < sizeof(paths); i++) {
+        for(int i = 0; i < sizeof(paths) / sizeof(char*); i++) {
                 fp = fopen(paths[i], "r");
                 if (fp != NULL) {
                         temp_path = paths[i];
@@ -239,12 +244,18 @@ void set_max_path()
                 "/sys/devices/platform/coretemp.0/hwmon/hwmon4/temp1_max",
                 "/sys/devices/platform/coretemp.0/hwmon/hwmon4/temp2_max",
                 "/sys/devices/platform/coretemp.0/hwmon/hwmon4/temp3_max",
+                "/sys/devices/platform/coretemp.0/hwmon/hwmon5/temp1_max",
+                "/sys/devices/platform/coretemp.0/hwmon/hwmon5/temp2_max",
+                "/sys/devices/platform/coretemp.0/hwmon/hwmon5/temp3_max",
+                "/sys/devices/platform/coretemp.0/hwmon/hwmon5/temp4_max",
+                "/sys/devices/platform/coretemp.0/hwmon/hwmon5/temp5_max",
+
         };
-        for(int i = 0; i < sizeof(paths); i++) {
+        for(int i = 0; i < sizeof(paths) / sizeof(char*); i++) {
                 fp = fopen(paths[i], "r");
                 if (fp != NULL) {
                         max_temp_path = paths[i];
-                        fprintf(stderr, "found max temp path: %s\n", temp_path);
+                        fprintf(stderr, "found max temp path: %s\n", max_temp_path);
                         fclose(fp);
                         return;
                 }

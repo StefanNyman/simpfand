@@ -150,10 +150,6 @@ void fan_control(const char *fan_path) {
   set_defaults(&cfg);
   parse_config(&cfg);
 
-  for (int i = 0; i < MAX_FAN_LVL; i++) {
-    printf("inc: %d, %d: %d\n", i, cfg.inc_lvls[i].tmp, cfg.inc_lvls[i].lvl);
-  }
-
   dir = INC;
   curr_temp = get_temp();
   curr_lvl = INIT_GARBAGE; /* need to initialize it to something invalid to

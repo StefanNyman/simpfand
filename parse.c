@@ -1,7 +1,9 @@
 #define _GNU_SOURCE
 #include "parse.h"
+
 #include <ctype.h>
 #include <errno.h>
+#include <linux/limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,6 +46,46 @@ int config_path_exists(char *path, int pathlen) {
   return 0;
 }
 
+void parse_ul(char *val, unsigned short *out, unsigned short default_value) {
+  char *ptr;
+  unsigned short parsed = (unsigned short)strtoul(val, &ptr, 10);
+  if (errno == ERANGE) {
+    *out = default_value;
+    return;
+  }
+  if (ptr == val) {
+    *out = default_value;
+    return;
+  }
+  *out = parsed;
+}
+
+void parse_tmp_lvls(tmp_lvl_t *lvls, char *val) {
+  char *otoken;
+  char *orest = val;
+  int ocntr = 0;
+  while ((otoken = strtok_r(orest, " ", &orest)) && ocntr < MAX_FAN_LVL) {
+    char *ntoken;
+    char *nrest = otoken;
+    for (int i = 0; i < 2; i++) {
+      ntoken = strtok_r(nrest, ":", &nrest);
+      if (ntoken == NULL) {
+        printf("invalid format for: %s\n", otoken);
+        break;
+      }
+      switch (i) {
+      case 0:
+        parse_ul(ntoken, &(lvls[ocntr].tmp), lvls[ocntr].tmp);
+        break;
+      default:
+        parse_ul(ntoken, &(lvls[ocntr].lvl), lvls[ocntr].lvl);
+        break;
+      }
+    }
+    ocntr++;
+  }
+}
+
 void parse_config(struct config *cfg) {
   char line[BUFF_MAX];
   char conf_path[PATH_MAX];
@@ -63,9 +105,8 @@ void parse_config(struct config *cfg) {
   }
 
   while (fgets(line, PATH_MAX, fp)) {
-    char *key, *val, *key_cmp = NULL;
+    char *key, *val = NULL;
     size_t linelen;
-    int key_len;
 
     linelen = strtrim(line);
     if (linelen == 0 || line[0] == '#') {
@@ -79,115 +120,33 @@ void parse_config(struct config *cfg) {
 
     key = val = line;
     strsep(&val, "=");
-    strtrim(val);
     strtrim(key);
-    key_len = strlen(key);
 
     if (val && !*val) {
       val = NULL;
     }
 
-    unsigned short read_val;
-    char *cpy = val;
-    errno = 0;
-    read_val = (unsigned short)strtol(val, &cpy, 10);
-    if (errno != 0 || cpy == val || *cpy != 0) {
-      fprintf(stderr, "simpfand: invalid entry in config for %s: \"%s\"", key,
-              cpy);
-    } else {
-      /* just look at the last 4 chars */
-      key_cmp = &key[key_len - 4];
-
-      if (STR_STARTS_WITH(key_cmp, "_LVL") && read_val > 7) {
-        fprintf(stderr,
-                "warning: \"%s\" set greater than max level (7), "
-                "using default value\n",
-                key);
-        continue;
-      } else if (STR_STARTS_WITH(key_cmp, "_LVL") && read_val < 0) {
-        /* fan levels of 0 might be ok now with more modern hardware */
-        fprintf(stderr,
-                "warning: \"%s\" set less than zero, "
-                "using default value\n",
-                key);
-        continue;
-      } else if (STR_STARTS_WITH(key_cmp, "TEMP") && read_val > cfg->max_temp) {
-        fprintf(stderr,
-                "warning: \"%s\" set greater than max temp (%d), "
-                "using default value\n",
-                key, cfg->max_temp);
-        continue;
-      } else if (STR_STARTS_WITH(key_cmp, "TEMP") && read_val <= 0) {
-        fprintf(stderr,
-                "warning: \"%s\" set less than lowest temp (0), "
-                "using default value\n",
-                key);
-        continue;
-      } else if (STR_STARTS_WITH(key, "POLLING") && read_val <= 0) {
-        fprintf(stderr,
-                "warning: \"%s\" set less or equal to than zero, "
-                "using default value\n",
-                key);
-        continue;
-
-        /* warn users who want to use fan level of 0 */
-      } else if (STR_STARTS_WITH(key_cmp, "_LVL") && read_val == 0) {
-        fprintf(stderr,
-                "warning: \"%s\" set to zero, suggest using a lower "
-                "polling interval than default\n",
-                key);
-      }
-
-      if (STR_STARTS_WITH(key, "POLLING")) {
-        cfg->poll_int = read_val;
-      } else if (STR_STARTS_WITH(key, "INC_LOW_TEMP")) {
-        cfg->inc_low_temp = read_val;
-      } else if (STR_STARTS_WITH(key, "INC_HIGH_TEMP")) {
-        cfg->inc_high_temp = read_val;
-      } else if (STR_STARTS_WITH(key, "INC_MAX_TEMP")) {
-        cfg->inc_max_temp = read_val;
-      } else if (STR_STARTS_WITH(key, "DEC_LOW_TEMP")) {
-        cfg->dec_low_temp = read_val;
-      } else if (STR_STARTS_WITH(key, "DEC_HIGH_TEMP")) {
-        cfg->dec_high_temp = read_val;
-      } else if (STR_STARTS_WITH(key, "DEC_MAX_TEMP")) {
-        cfg->dec_max_temp = read_val;
-      } else if (STR_STARTS_WITH(key, "BASE_LVL")) {
-        cfg->base_lvl = read_val;
-      } else if (STR_STARTS_WITH(key, "INC_LOW_LVL")) {
-        cfg->inc_low_lvl = read_val;
-      } else if (STR_STARTS_WITH(key, "INC_HIGH_LVL")) {
-        cfg->inc_high_lvl = read_val;
-      } else if (STR_STARTS_WITH(key, "INC_MAX_LVL")) {
-        cfg->inc_max_lvl = read_val;
-      } else if (STR_STARTS_WITH(key, "DEC_LOW_LVL")) {
-        cfg->dec_low_lvl = read_val;
-      } else if (STR_STARTS_WITH(key, "DEC_HIGH_LVL")) {
-        cfg->dec_high_lvl = read_val;
-      } else if (STR_STARTS_WITH(key, "DEC_MAX_LVL")) {
-        cfg->dec_max_lvl = read_val;
-      }
+    if (STR_STARTS_WITH(key, "POLLING")) {
+      parse_ul(val, &(cfg->poll_int), cfg->poll_int);
+    } else if (STR_STARTS_WITH(key, "BASE_LVL")) {
+      parse_ul(val, &(cfg->base_lvl), cfg->base_lvl);
+    } else if (STR_STARTS_WITH(key, "INC_TMP_LVLS")) {
+      parse_tmp_lvls(cfg->inc_lvls, val);
+    } else if (STR_STARTS_WITH(key, "DEC_TMP_LVLS")) {
+      parse_tmp_lvls(cfg->dec_lvls, val);
     }
   }
 }
 
 void set_defaults(struct config *cfg) {
-  cfg->inc_low_temp = INC_LOW_TEMP;
-  cfg->inc_high_temp = INC_HIGH_TEMP;
-  cfg->inc_max_temp = INC_MAX_TEMP;
-
-  cfg->inc_low_lvl = INC_LOW_LEVEL;
-  cfg->inc_high_lvl = INC_HIGH_LEVEL;
-  cfg->inc_max_lvl = INC_MAX_LEVEL;
-
-  cfg->dec_low_lvl = DEC_LOW_LEVEL;
-  cfg->dec_high_lvl = DEC_HIGH_LEVEL;
-  cfg->dec_max_lvl = DEC_MAX_LEVEL;
-
-  cfg->dec_low_temp = DEC_LOW_TEMP;
-  cfg->dec_high_temp = DEC_HIGH_TEMP;
-  cfg->dec_max_temp = DEC_MAX_TEMP;
-
   cfg->poll_int = POLL_INTERVAL;
   cfg->base_lvl = BASE_LEVEL;
+  tmp_lvl_t incs[7] = {{40, 0}, {45, 1}, {50, 2}, {55, 3},
+                       {60, 4}, {65, 6}, {70, 7}};
+  tmp_lvl_t decs[7] = {{40, 0}, {45, 1}, {50, 2}, {55, 3},
+                       {60, 6}, {65, 7}, {70, 7}};
+  for (int i = 0; i < 7; i++) {
+    cfg->inc_lvls[i] = incs[i];
+    cfg->dec_lvls[i] = decs[i];
+  }
 }
